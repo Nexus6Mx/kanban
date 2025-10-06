@@ -50,10 +50,16 @@
 
     <div id="appContainer" class="hidden">
         <header class="bg-white shadow-md p-4 flex justify-between items-center">
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-4">
                 <select id="boardSelector" class="bg-gray-100 border-2 border-gray-200 rounded-lg text-xl font-bold p-2 focus:outline-none focus:border-blue-500"></select>
-                <button id="editBoardBtn" class="p-2 rounded-md hover:bg-gray-200"><i class="ph-pencil-simple text-xl"></i></button>
-                <button id="newBoardBtn" class="p-2 rounded-md hover:bg-gray-200"><i class="ph-plus-circle text-xl"></i></button>
+                <button id="editBoardBtn" class="flex items-center gap-1.5 text-gray-500 hover:text-blue-600 transition-colors duration-150">
+                    <i class="ph-pencil-simple text-lg"></i>
+                    <span class="text-sm font-medium">Editar</span>
+                </button>
+                <button id="newBoardBtn" class="flex items-center gap-1.5 text-gray-500 hover:text-blue-600 transition-colors duration-150">
+                    <i class="ph-plus-circle text-lg"></i>
+                    <span class="text-sm font-medium">Nuevo</span>
+                </button>
             </div>
             <div class="flex items-center gap-4">
                 <div class="relative"><i class="ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i><input type="text" id="searchInput" placeholder="Buscar tareas..." class="pl-10 pr-4 py-2 border rounded-lg"></div>
@@ -158,7 +164,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return responseData;
         } catch (error) {
             console.error('API Call Error:', action, error);
-            if (error.message.includes('Debes iniciar sesión')) showLogin();
+            if (error.message.includes('Debes iniciar sesión')) {
+                alert('ERROR DE SESIÓN: El servidor no está guardando la sesión correctamente. Contacta al administrador del servidor sobre la configuración de sesiones de PHP.');
+                showLogin(); 
+            }
             throw error;
         }
     }
@@ -343,7 +352,26 @@ document.addEventListener('DOMContentLoaded', () => {
     function findColumn(columnId) { return boardData.columns.find(c => c.id == columnId); }
 
     // --- Event Listeners Init ---
-    authForm.addEventListener('submit', async (e) => { /* ... */ });
+    authForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(authForm).entries());
+        const action = isLoginMode ? 'login' : 'register_user';
+        try {
+            const res = await apiCall(action, 'POST', data);
+            if (isLoginMode && res.status === 'success') {
+                currentUser = res.user;
+                localStorage.setItem('kanban_user', JSON.stringify(currentUser));
+                showApp();
+            } else if (!isLoginMode && res.status === 'success') {
+                document.getElementById('authMessage').className = 'text-sm text-green-600';
+                document.getElementById('authMessage').textContent = '¡Registro exitoso! Por favor, inicia sesión.';
+                document.getElementById('toggleAuthMode').click();
+            }
+        } catch (error) {
+            document.getElementById('authMessage').className = 'text-sm text-red-600';
+            document.getElementById('authMessage').textContent = error.message;
+        }
+    });
     document.getElementById('toggleAuthMode').addEventListener('click', (e) => { /* ... */ });
     document.getElementById('logoutBtn').addEventListener('click', () => apiCall('logout', 'POST').finally(showLogin));
     boardSelector.addEventListener('change', async () => {
