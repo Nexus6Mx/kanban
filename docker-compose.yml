@@ -1,0 +1,25 @@
+
+services:
+  web:
+    build: .
+    ports:
+      - "8889:80"
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      - db
+
+  db:
+    image: mariadb:11
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: admin
+      MYSQL_DATABASE: u185421649_kanban
+      MYSQL_USER: u185421649_user_kanban
+      MYSQL_PASSWORD: Chckci74$
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./u185421649_kanban.sql:/docker-entrypoint-initdb.d/init.sql
+
+volumes:
+  db_data:

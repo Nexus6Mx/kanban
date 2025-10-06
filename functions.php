@@ -8,7 +8,7 @@ function db_connect($servername, $username, $password, $dbname) {
         }
         $conn->set_charset("utf8mb4");
         return $conn;
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         http_response_code(500);
         echo json_encode(['status' => 'error', 'message' => 'Database connection error: ' . $e->getMessage()]);
         exit;
