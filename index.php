@@ -347,11 +347,47 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     function closeColumnModal() { columnModal.classList.add('hidden'); columnModal.classList.remove('flex'); }
 
+    function openTaskModal(task = null, columnId = null) {
+        const form = document.getElementById('taskForm');
+        form.reset();
+        const modalTitle = document.getElementById('taskModalTitle');
+        const taskIdInput = document.getElementById('taskId');
+        const taskColumnIdInput = document.getElementById('taskColumnId');
+        const taskTitleInput = document.getElementById('taskTitle');
+        const taskDescriptionInput = document.getElementById('taskDescription');
+        const deleteTaskBtn = document.getElementById('deleteTaskBtn');
+
+        if (task) {
+            modalTitle.textContent = 'Editar Tarea';
+            taskIdInput.value = task.id;
+            taskColumnIdInput.value = task.column_id;
+            taskTitleInput.value = task.title;
+            taskDescriptionInput.value = task.description;
+            deleteTaskBtn.style.display = 'block';
+        } else {
+            modalTitle.textContent = 'Nueva Tarea';
+            taskIdInput.value = '';
+            taskColumnIdInput.value = columnId;
+            taskTitleInput.value = '';
+            taskDescriptionInput.value = '';
+            deleteTaskBtn.style.display = 'none';
+        }
+
+        taskModal.classList.remove('hidden');
+        taskModal.classList.add('flex');
+    }
+
+    function closeTaskModal() {
+        taskModal.classList.add('hidden');
+        taskModal.classList.remove('flex');
+    }
+
     // --- Helper Functions ---
     function findTask(taskId) { for (const col of boardData.columns) { const task = col.tasks.find(t => t.id == taskId); if (task) return task; } return null; }
     function findColumn(columnId) { return boardData.columns.find(c => c.id == columnId); }
 
     // --- Event Listeners Init ---
+    document.getElementById('closeTaskModal').addEventListener('click', closeTaskModal);
     authForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const data = Object.fromEntries(new FormData(authForm).entries());
@@ -411,9 +447,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (editBtn) {
             openColumnModal(findColumn(editBtn.closest('.kanban-column').dataset.columnId));
         } else if (addBtn) {
-            // openTaskModal(null, addBtn.closest('.kanban-column').dataset.columnId);
+            openTaskModal(null, addBtn.closest('.kanban-column').dataset.columnId);
         } else if (taskEl) {
-            // openTaskModal(findTask(taskEl.dataset.taskId));
+            openTaskModal(findTask(taskEl.dataset.taskId));
         }
     });
 
