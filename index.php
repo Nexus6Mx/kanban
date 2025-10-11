@@ -80,6 +80,14 @@
                         <input type="hidden" id="taskId" name="id"><input type="hidden" id="taskColumnId" name="column_id">
                         <div class="mb-4"><label for="taskTitle" class="block text-sm font-medium text-gray-700 mb-1">Título</label><input type="text" id="taskTitle" name="title" class="w-full border-gray-300 rounded-lg" required></div>
                         <div class="mb-4"><label for="taskDescription" class="block text-sm font-medium text-gray-700 mb-1">Descripción</label><textarea id="taskDescription" name="description" rows="5" class="w-full border-gray-300 rounded-lg"></textarea></div>
+                        <div class="mb-4">
+                            <label for="taskPriority" class="block text-sm font-medium text-gray-700 mb-1">Prioridad</label>
+                            <select id="taskPriority" name="priority" class="w-full border-gray-300 rounded-lg">
+                                <option value="Baja">Baja</option>
+                                <option value="Media">Media</option>
+                                <option value="Alta">Alta</option>
+                            </select>
+                        </div>
                         <div class="border-t pt-4">
                             <div class="flex border-b mb-4">
                                 <button type="button" class="tab-button active" data-tab="subtasks"><i class="ph-check-square-offset mr-1"></i> Subtareas</button>
@@ -355,6 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const taskColumnIdInput = document.getElementById('taskColumnId');
         const taskTitleInput = document.getElementById('taskTitle');
         const taskDescriptionInput = document.getElementById('taskDescription');
+        const taskPriorityInput = document.getElementById('taskPriority');
         const deleteTaskBtn = document.getElementById('deleteTaskBtn');
 
         if (task) {
@@ -363,18 +372,46 @@ document.addEventListener('DOMContentLoaded', () => {
             taskColumnIdInput.value = task.column_id;
             taskTitleInput.value = task.title;
             taskDescriptionInput.value = task.description;
+            taskPriorityInput.value = task.priority;
             deleteTaskBtn.style.display = 'block';
+            renderSubtasks(task);
         } else {
             modalTitle.textContent = 'Nueva Tarea';
             taskIdInput.value = '';
             taskColumnIdInput.value = columnId;
             taskTitleInput.value = '';
             taskDescriptionInput.value = '';
+            taskPriorityInput.value = 'Media';
             deleteTaskBtn.style.display = 'none';
+            document.getElementById('subtasks-tab').innerHTML = '<p class="text-gray-500">Guarda la tarea para poder añadir subtareas.</p>';
         }
 
         taskModal.classList.remove('hidden');
         taskModal.classList.add('flex');
+    }
+
+    function renderSubtasks(task) {
+        const container = document.getElementById('subtasks-tab');
+        if (!container) return;
+
+        let subtasksHTML = task.subtasks.map(st => `
+            <div class="subtask-item flex items-center justify-between p-2 border-b" data-subtask-id="${st.id}">
+                <div class="flex items-center">
+                    <input type="checkbox" class="subtask-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" ${st.is_completed == 1 ? 'checked' : ''}>
+                    <span class="ml-3 ${st.is_completed == 1 ? 'line-through text-gray-500' : ''}">${st.title}</span>
+                </div>
+                <button type="button" class="delete-subtask-btn text-gray-400 hover:text-red-600"><i class="ph-trash"></i></button>
+            </div>
+        `).join('');
+
+        const addSubtaskFormHTML = `
+            <div id="addSubtaskContainer" class="flex gap-2 mt-4">
+                <input type="text" id="newSubtaskTitle" class="flex-grow border-gray-300 rounded-lg text-sm" placeholder="Añadir nueva subtarea..." required>
+                <button type="button" id="addSubtaskBtn" class="bg-blue-500 text-white px-3 py-1 rounded-lg hover:bg-blue-600 text-sm font-semibold">Añadir</button>
+            </div>
+        `;
+
+        container.innerHTML = subtasksHTML + addSubtaskFormHTML;
     }
 
     function closeTaskModal() {
@@ -388,6 +425,100 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Listeners Init ---
     document.getElementById('closeTaskModal').addEventListener('click', closeTaskModal);
+
+    document.getElementById('deleteTaskBtn').addEventListener('click', async () => {
+        const taskId = document.getElementById('taskId').value;
+        if (!taskId) {
+            alert('No se ha podido encontrar el ID de la tarea.');
+            return;
+        }
+
+        if (confirm('¿Estás seguro de que quieres eliminar esta tarea? Todas las subtareas, adjuntos y comentarios asociados se perderán permanentemente.')) {
+            try {
+                await apiCall('delete_task', 'POST', { id: taskId });
+                closeTaskModal();
+                await initializeBoard(currentBoardId); // Refresh the board
+            } catch (error) {
+                alert('Error al eliminar la tarea: ' + error.message);
+            }
+        }
+    });
+
+    taskModal.addEventListener('click', e => {
+        const tabButton = e.target.closest('.tab-button');
+        if (tabButton) {
+            const tabName = tabButton.dataset.tab;
+            taskModal.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            taskModal.querySelectorAll('.tab-pane').forEach(pane => pane.classList.add('hidden'));
+            tabButton.classList.add('active');
+            const activePane = document.getElementById(`${tabName}-tab`);
+            if (activePane) {
+                activePane.classList.remove('hidden');
+            }
+        }
+
+        const deleteSubtaskBtn = e.target.closest('.delete-subtask-btn');
+        if (deleteSubtaskBtn) {
+            const subtaskItem = deleteSubtaskBtn.closest('.subtask-item');
+            const subtaskId = subtaskItem.dataset.subtaskId;
+            if (confirm('¿Estás seguro de que quieres eliminar esta subtarea?')) {
+                apiCall('delete_subtask', 'POST', { id: subtaskId })
+                    .then(() => {
+                        const taskId = document.getElementById('taskId').value;
+                        const task = findTask(taskId);
+                        task.subtasks = task.subtasks.filter(st => st.id != subtaskId);
+                        subtaskItem.remove();
+                        renderBoard(); // Re-render to update subtask counts
+                    })
+                    .catch(error => alert('Error al eliminar la subtarea: ' + error.message));
+            }
+        }
+
+        const addSubtaskBtn = e.target.closest('#addSubtaskBtn');
+        if (addSubtaskBtn) {
+            const taskId = document.getElementById('taskId').value;
+            const titleInput = document.getElementById('newSubtaskTitle');
+            const title = titleInput.value.trim();
+
+            if (title) {
+                apiCall('add_subtask', 'POST', { task_id: taskId, title: title })
+                    .then(res => {
+                        const task = findTask(taskId);
+                        task.subtasks.push(res.data);
+                        renderSubtasks(task);
+                        renderBoard(); // Re-render to update subtask counts
+                    })
+                    .catch(error => alert('Error al añadir la subtarea: ' + error.message));
+            }
+        }
+    });
+
+    taskModal.addEventListener('change', e => {
+        const subtaskCheckbox = e.target.closest('.subtask-checkbox');
+        if (subtaskCheckbox) {
+            const subtaskItem = subtaskCheckbox.closest('.subtask-item');
+            const subtaskId = subtaskItem.dataset.subtaskId;
+            const is_completed = subtaskCheckbox.checked;
+            
+            apiCall('update_subtask', 'POST', { id: subtaskId, is_completed: is_completed ? 1 : 0 })
+                .then(() => {
+                    const taskId = document.getElementById('taskId').value;
+                    const task = findTask(taskId);
+                    const subtask = task.subtasks.find(st => st.id == subtaskId);
+                    subtask.is_completed = is_completed ? 1 : 0;
+                    
+                    const span = subtaskItem.querySelector('span');
+                    span.classList.toggle('line-through', is_completed);
+                    span.classList.toggle('text-gray-500', is_completed);
+                    renderBoard(); // Re-render to update subtask counts
+                })
+                .catch(error => {
+                    alert('Error al actualizar la subtarea: ' + error.message);
+                    subtaskCheckbox.checked = !is_completed; // Revert on failure
+                });
+        }
+    });
+
     authForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const data = Object.fromEntries(new FormData(authForm).entries());
@@ -435,10 +566,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const columnData = Object.fromEntries(new FormData(e.target).entries());
         if (!columnData.id) columnData.board_id = currentBoardId;
         const action = columnData.id ? 'update_column' : 'add_column';
-        if (await apiCall(action, 'POST', columnData)) { 
-            closeColumnModal(); 
-            await initializeBoard(currentBoardId);
-        }
+        try {
+            const res = await apiCall(action, 'POST', columnData);
+            if (res.status === 'success') {
+                closeColumnModal();
+                await initializeBoard(currentBoardId);
+            }
+        } catch (error) { alert(`Error al guardar la columna: ${error.message}`); }
+    });
+
+    document.getElementById('taskForm').addEventListener('submit', async e => {
+        e.preventDefault();
+        const taskData = Object.fromEntries(new FormData(e.target).entries());
+        const action = taskData.id ? 'update_task' : 'add_task';
+        try {
+            const res = await apiCall(action, 'POST', taskData);
+            if (res.status === 'success') {
+                closeTaskModal();
+                await initializeBoard(currentBoardId);
+            }
+        } catch (error) { alert(`Error al guardar la tarea: ${error.message}`); }
     });
     kanbanBoard.addEventListener('click', (e) => {
         const editBtn = e.target.closest('.edit-column-btn');
