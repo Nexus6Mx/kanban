@@ -80,13 +80,19 @@
                         <input type="hidden" id="taskId" name="id"><input type="hidden" id="taskColumnId" name="column_id">
                         <div class="mb-4"><label for="taskTitle" class="block text-sm font-medium text-gray-700 mb-1">Título</label><input type="text" id="taskTitle" name="title" class="w-full border-gray-300 rounded-lg" required></div>
                         <div class="mb-4"><label for="taskDescription" class="block text-sm font-medium text-gray-700 mb-1">Descripción</label><textarea id="taskDescription" name="description" rows="5" class="w-full border-gray-300 rounded-lg"></textarea></div>
-                        <div class="mb-4">
-                            <label for="taskPriority" class="block text-sm font-medium text-gray-700 mb-1">Prioridad</label>
-                            <select id="taskPriority" name="priority" class="w-full border-gray-300 rounded-lg">
-                                <option value="Baja">Baja</option>
-                                <option value="Media">Media</option>
-                                <option value="Alta">Alta</option>
-                            </select>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="mb-4">
+                                <label for="taskPriority" class="block text-sm font-medium text-gray-700 mb-1">Prioridad</label>
+                                <select id="taskPriority" name="priority" class="w-full border-gray-300 rounded-lg">
+                                    <option value="Baja">Baja</option>
+                                    <option value="Media">Media</option>
+                                    <option value="Alta">Alta</option>
+                                </select>
+                            </div>
+                            <div class="mb-4">
+                                <label for="taskDueDate" class="block text-sm font-medium text-gray-700 mb-1">Fecha Límite</label>
+                                <input type="date" id="taskDueDate" name="due_date" class="w-full border-gray-300 rounded-lg">
+                            </div>
                         </div>
                         <div class="border-t pt-4">
                             <div class="flex border-b mb-4">
@@ -285,7 +291,26 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderTask(task) {
         const completedSubtasks = task.subtasks.filter(st => st.is_completed == 1).length;
         const totalSubtasks = task.subtasks.length;
-        const isOverdue = task.due_date && new Date(task.due_date) < new Date().setHours(0, 0, 0, 0);
+
+        // Date logic
+        let dueDateDisplay = '';
+        if (task.due_date) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            // The backend returns YYYY-MM-DD. new Date() will parse it as UTC midnight.
+            // To avoid timezone issues, add T00:00:00 to make it explicit local time at midnight.
+            const dueDate = new Date(task.due_date + 'T00:00:00');
+
+            let dueDateClass = '';
+            if (dueDate.getTime() < today.getTime()) {
+                dueDateClass = 'text-red-600 font-semibold'; // Overdue
+            } else {
+                dueDateClass = 'text-green-600'; // Upcoming or due today
+            }
+            dueDateDisplay = `<span class="flex items-center gap-1 ${dueDateClass}"><i class="ph-calendar"></i> ${dueDate.toLocaleDateString()}</span>`;
+        }
+
         const priorityColors = {
             'Alta': 'bg-red-500 text-white',
             'Media': 'bg-yellow-500 text-white',
@@ -301,7 +326,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <p class="font-semibold mb-2">${task.title}</p>
             <div class="flex justify-between items-center text-sm text-gray-600">
                 <div class="flex items-center gap-2 flex-wrap">
-                    ${task.due_date ? `<span class="flex items-center gap-1 ${isOverdue ? 'text-red-600 font-semibold' : ''}"><i class="ph-calendar"></i> ${new Date(task.due_date).toLocaleDateString()}</span>` : ''}
+                    ${dueDateDisplay}
                     ${totalSubtasks > 0 ? `<span class="flex items-center gap-1 ${completedSubtasks === totalSubtasks ? 'text-green-600' : ''}"><i class="ph-check-square-offset"></i> ${completedSubtasks}/${totalSubtasks}</span>` : ''}
                     ${task.attachments.length > 0 ? `<span class="flex items-center gap-1"><i class="ph-paperclip"></i> ${task.attachments.length}</span>` : ''}
                     ${task.comments.length > 0 ? `<span class="flex items-center gap-1"><i class="ph-chats"></i> ${task.comments.length}</span>` : ''}
@@ -377,6 +402,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const taskTitleInput = document.getElementById('taskTitle');
         const taskDescriptionInput = document.getElementById('taskDescription');
         const taskPriorityInput = document.getElementById('taskPriority');
+        const taskDueDateInput = document.getElementById('taskDueDate');
         const deleteTaskBtn = document.getElementById('deleteTaskBtn');
 
         if (task) {
@@ -386,6 +412,7 @@ document.addEventListener('DOMContentLoaded', () => {
             taskTitleInput.value = task.title;
             taskDescriptionInput.value = task.description;
             taskPriorityInput.value = task.priority;
+            taskDueDateInput.value = task.due_date;
             deleteTaskBtn.style.display = 'block';
             renderSubtasks(task);
             renderAttachments(task);
@@ -397,6 +424,7 @@ document.addEventListener('DOMContentLoaded', () => {
             taskTitleInput.value = '';
             taskDescriptionInput.value = '';
             taskPriorityInput.value = 'Media';
+            taskDueDateInput.value = '';
             deleteTaskBtn.style.display = 'none';
             document.getElementById('subtasks-tab').innerHTML = '<p class="text-gray-500">Guarda la tarea para poder añadir subtareas.</p>';
             document.getElementById('attachments-tab').innerHTML = '<p class="text-gray-500">Guarda la tarea para poder añadir adjuntos.</p>';
