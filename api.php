@@ -28,7 +28,16 @@ if (isset($_POST['action']) && $_POST['action'] === 'upload_attachment') {
         } else {
             $fileTmpPath = $_FILES['attachmentFile']['tmp_name'];
             $fileName = basename($_FILES['attachmentFile']['name']);
-            $dest_path = $upload_dir . md5(time() . $fileName) . '.' . strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+            $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+            
+            $allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
+            if (!in_array($fileExtension, $allowedExtensions)) {
+                $response['message'] = 'Error: Tipo de archivo no permitido.';
+                echo json_encode($response);
+                exit;
+            }
+
+            $dest_path = $upload_dir . md5(time() . $fileName) . '.' . $fileExtension;
             if(move_uploaded_file($fileTmpPath, $dest_path)) {
                 $conn = db_connect($servername, $username, $password, $dbname);
                 $stmt = $conn->prepare("INSERT INTO attachments (task_id, file_name, file_path) VALUES (?, ?, ?)");

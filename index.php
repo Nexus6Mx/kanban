@@ -96,7 +96,10 @@
                             </div>
                             <div id="tab-content">
                                 <div id="subtasks-tab" class="tab-pane"></div>
-                                <div id="attachments-tab" class="tab-pane hidden"></div>
+                                <div id="attachments-tab" class="tab-pane hidden">
+                                    <ul id="attachment-list" class="space-y-3"></ul>
+                                    <button type="button" id="addAttachmentBtn" class="mt-4 bg-gray-200 text-gray-700 font-semibold px-4 py-2 rounded-lg hover:bg-gray-300 flex items-center gap-2"><i class="ph-plus"></i> Añadir adjunto</button>
+                                </div>
                                 <div id="comments-tab" class="tab-pane hidden"></div>
                             </div>
                         </div>
@@ -105,7 +108,7 @@
                 </div>
                 <div class="absolute bottom-0 left-0 right-0 flex justify-end gap-3 p-4 bg-gray-50 border-t"><button type="button" id="deleteTaskBtn" class="bg-red-600 text-white font-semibold px-4 py-2 rounded-lg">Eliminar</button><button type="submit" id="saveTaskBtn" class="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg">Guardar Cambios</button></div>
             </form>
-            <form id="attachmentForm" class="hidden"><input type="file" id="attachmentFile" name="attachmentFile"/></form>
+            <form id="attachmentForm" class="hidden"><input type="file" id="attachmentFile" name="attachmentFile" accept=".pdf,image/*,.doc,.docx,.xls,.xlsx,.ppt,.pptx"/></form>
         </div>
     </div>
     <div id="columnModal" class="fixed inset-0 bg-gray-800 bg-opacity-60 hidden items-center justify-center z-50 transition-opacity duration-300">
@@ -375,6 +378,7 @@ document.addEventListener('DOMContentLoaded', () => {
             taskPriorityInput.value = task.priority;
             deleteTaskBtn.style.display = 'block';
             renderSubtasks(task);
+            renderAttachments(task);
         } else {
             modalTitle.textContent = 'Nueva Tarea';
             taskIdInput.value = '';
@@ -384,6 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
             taskPriorityInput.value = 'Media';
             deleteTaskBtn.style.display = 'none';
             document.getElementById('subtasks-tab').innerHTML = '<p class="text-gray-500">Guarda la tarea para poder añadir subtareas.</p>';
+            document.getElementById('attachments-tab').innerHTML = '<p class="text-gray-500">Guarda la tarea para poder añadir adjuntos.</p>';
         }
 
         taskModal.classList.remove('hidden');
@@ -406,13 +411,63 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const addSubtaskFormHTML = `
             <div id="addSubtaskContainer" class="flex gap-2 mt-4">
-                <input type="text" id="newSubtaskTitle" class="flex-grow border-gray-300 rounded-lg text-sm" placeholder="Añadir nueva subtarea..." required>
+                <input type="text" id="newSubtaskTitle" class="flex-grow border-gray-300 rounded-lg text-sm" placeholder="Añadir nueva subtarea...">
                 <button type="button" id="addSubtaskBtn" class="bg-blue-500 text-white px-3 py-1 rounded-lg hover:bg-blue-600 text-sm font-semibold">Añadir</button>
             </div>
         `;
 
         container.innerHTML = subtasksHTML + addSubtaskFormHTML;
     }
+
+    function renderAttachments(task) {
+        const container = document.getElementById('attachment-list');
+        if (!container) return;
+        container.innerHTML = task.attachments.map(file => `
+            <li class="flex items-center justify-between bg-gray-100 p-2 rounded-lg" data-attachment-id="${file.id}">
+                <a href="${file.file_path}" target="_blank" class="flex items-center gap-2 text-blue-600 hover:underline">
+                    <i class="ph-file-text text-xl"></i>
+                    <span>${file.file_name}</span>
+                </a>
+                <button type="button" class="delete-attachment-btn text-gray-400 hover:text-red-600"><i class="ph-trash"></i></button>
+            </li>
+        `).join('');
+    }
+
+    async function handleFileUpload(file) {
+        const taskId = document.getElementById('taskId').value;
+        if (!taskId || !file) return;
+
+        const formData = new FormData();
+        formData.append('action', 'upload_attachment');
+        formData.append('task_id', taskId);
+        formData.append('attachmentFile', file);
+
+        try {
+            const response = await fetch('api.php', { method: 'POST', body: formData });
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                const task = findTask(taskId);
+                task.attachments.push(result.file);
+                renderAttachments(task);
+                renderBoard(); // Re-render to update attachment counts
+            } else {
+                throw new Error(result.message);
+            }
+        } catch (error) {
+            alert(`Error al subir el archivo: ${error.message}`);
+        }
+    }
+
+    document.getElementById('addAttachmentBtn').addEventListener('click', () => {
+        document.getElementById('attachmentFile').click();
+    });
+
+    document.getElementById('attachmentFile').addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            handleFileUpload(e.target.files[0]);
+        }
+    });
 
     function closeTaskModal() {
         taskModal.classList.add('hidden');
@@ -454,6 +509,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const activePane = document.getElementById(`${tabName}-tab`);
             if (activePane) {
                 activePane.classList.remove('hidden');
+            }
+        }
+
+        const deleteAttachmentBtn = e.target.closest('.delete-attachment-btn');
+        if (deleteAttachmentBtn) {
+            const attachmentItem = deleteAttachmentBtn.closest('[data-attachment-id]');
+            const attachmentId = attachmentItem.dataset.attachmentId;
+            if (confirm('¿Estás seguro de que quieres eliminar este archivo adjunto?')) {
+                apiCall('delete_attachment', 'POST', { id: attachmentId })
+                    .then(() => {
+                        const taskId = document.getElementById('taskId').value;
+                        const task = findTask(taskId);
+                        task.attachments = task.attachments.filter(att => att.id != attachmentId);
+                        attachmentItem.remove();
+                        renderBoard(); // Re-render to update attachment counts
+                    })
+                    .catch(error => alert('Error al eliminar el archivo adjunto: ' + error.message));
             }
         }
 
