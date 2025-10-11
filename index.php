@@ -286,8 +286,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const completedSubtasks = task.subtasks.filter(st => st.is_completed == 1).length;
         const totalSubtasks = task.subtasks.length;
         const isOverdue = task.due_date && new Date(task.due_date) < new Date().setHours(0, 0, 0, 0);
+        const priorityColors = {
+            'Alta': 'bg-red-500 text-white',
+            'Media': 'bg-yellow-500 text-white',
+            'Baja': 'bg-green-500 text-white'
+        };
+        const priorityBadge = task.priority ? `<span class="px-2 py-1 text-xs font-semibold rounded-full ${priorityColors[task.priority]}">${task.priority}</span>` : '';
+
         return `<div class="kanban-task" data-task-id="${task.id}" style="border-left: 5px solid ${task.color};">
-            <div class="flex flex-wrap gap-1 mb-2">${task.tags.map(tag => `<span class="tag text-white" style="background-color:${tag.color}">${tag.name}</span>`).join('')}</div>
+            <div class="flex flex-wrap gap-1 mb-2">
+                ${priorityBadge}
+                ${task.tags.map(tag => `<span class="tag text-white" style="background-color:${tag.color}">${tag.name}</span>`).join('')}
+            </div>
             <p class="font-semibold mb-2">${task.title}</p>
             <div class="flex justify-between items-center text-sm text-gray-600">
                 <div class="flex items-center gap-2 flex-wrap">
@@ -379,6 +389,7 @@ document.addEventListener('DOMContentLoaded', () => {
             deleteTaskBtn.style.display = 'block';
             renderSubtasks(task);
             renderAttachments(task);
+            renderComments(task);
         } else {
             modalTitle.textContent = 'Nueva Tarea';
             taskIdInput.value = '';
@@ -389,6 +400,7 @@ document.addEventListener('DOMContentLoaded', () => {
             deleteTaskBtn.style.display = 'none';
             document.getElementById('subtasks-tab').innerHTML = '<p class="text-gray-500">Guarda la tarea para poder añadir subtareas.</p>';
             document.getElementById('attachments-tab').innerHTML = '<p class="text-gray-500">Guarda la tarea para poder añadir adjuntos.</p>';
+            document.getElementById('comments-tab').innerHTML = '<p class="text-gray-500">Guarda la tarea para poder añadir comentarios.</p>';
         }
 
         taskModal.classList.remove('hidden');
@@ -431,6 +443,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button type="button" class="delete-attachment-btn text-gray-400 hover:text-red-600"><i class="ph-trash"></i></button>
             </li>
         `).join('');
+    }
+
+    function renderComments(task) {
+        const container = document.getElementById('comments-tab');
+        if (!container) return;
+
+        let commentsHTML = '<div id="comment-list" class="space-y-4">';
+        commentsHTML += task.comments.map(comment => `
+            <div class="comment-item" data-comment-id="${comment.id}">
+                <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center font-bold text-gray-600 text-sm">${comment.user_name ? comment.user_name.charAt(0).toUpperCase() : 'A'}</div>
+                    <div class="flex-1">
+                        <p class="font-semibold text-sm">${comment.user_name || 'Anónimo'}</p>
+                        <div class="comment-content text-gray-700">${comment.comment}</div>
+                        <div class="text-xs text-gray-400 mt-1">
+                            <span>${new Date(comment.created_at).toLocaleString()}</span>
+                            <button type="button" class="edit-comment-btn ml-2 font-semibold text-blue-500 hover:underline">Editar</button>
+                            <button type="button" class="delete-comment-btn ml-2 font-semibold text-red-500 hover:underline">Eliminar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        commentsHTML += '</div>';
+
+        const addCommentFormHTML = `
+            <div id="addCommentContainer" class="mt-6 pt-4 border-t">
+                <textarea id="newCommentText" class="w-full border-gray-300 rounded-lg" rows="3" placeholder="Escribe un comentario..."></textarea>
+                <button type="button" id="addCommentBtn" class="mt-2 bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-blue-700">Añadir Comentario</button>
+            </div>
+        `;
+
+        container.innerHTML = commentsHTML + addCommentFormHTML;
     }
 
     async function handleFileUpload(file) {
@@ -561,6 +606,87 @@ document.addEventListener('DOMContentLoaded', () => {
                         renderBoard(); // Re-render to update subtask counts
                     })
                     .catch(error => alert('Error al añadir la subtarea: ' + error.message));
+            }
+        }
+
+        const addCommentBtn = e.target.closest('#addCommentBtn');
+        if (addCommentBtn) {
+            const taskId = document.getElementById('taskId').value;
+            const commentText = document.getElementById('newCommentText').value.trim();
+            if (commentText) {
+                apiCall('add_comment', 'POST', { task_id: taskId, comment: commentText, user_id: currentUser.id })
+                    .then(res => {
+                        const task = findTask(taskId);
+                        // The backend should return the full comment object
+                        // For now, we'll create a temporary one.
+                        const newComment = {
+                            id: res.id,
+                            comment: commentText,
+                            user_name: currentUser.name,
+                            created_at: new Date().toISOString()
+                        };
+                        task.comments.push(newComment);
+                        renderComments(task);
+                        renderBoard(); // to update comment count on task card
+                    })
+                    .catch(error => alert('Error al añadir el comentario: ' + error.message));
+            }
+        }
+
+        const editCommentBtn = e.target.closest('.edit-comment-btn');
+        if (editCommentBtn) {
+            const commentItem = editCommentBtn.closest('.comment-item');
+            const commentContent = commentItem.querySelector('.comment-content');
+            const originalText = commentContent.textContent;
+
+            commentContent.innerHTML = `
+                <textarea class="w-full border-gray-300 rounded-lg text-sm">${originalText}</textarea>
+                <div class="mt-1">
+                    <button type="button" class="save-comment-btn bg-blue-500 text-white px-2 py-1 rounded text-xs">Guardar</button>
+                    <button type="button" class="cancel-edit-comment-btn text-gray-500 px-2 py-1 rounded text-xs">Cancelar</button>
+                </div>
+            `;
+        }
+
+        const saveCommentBtn = e.target.closest('.save-comment-btn');
+        if (saveCommentBtn) {
+            const commentItem = saveCommentBtn.closest('.comment-item');
+            const commentId = commentItem.dataset.commentId;
+            const newText = commentItem.querySelector('textarea').value.trim();
+            if (newText) {
+                apiCall('update_comment', 'POST', { id: commentId, comment: newText })
+                    .then(() => {
+                        const taskId = document.getElementById('taskId').value;
+                        const task = findTask(taskId);
+                        const comment = task.comments.find(c => c.id == commentId);
+                        comment.comment = newText;
+                        renderComments(task);
+                    })
+                    .catch(error => alert('Error al guardar el comentario: ' + error.message));
+            }
+        }
+
+        const cancelEditCommentBtn = e.target.closest('.cancel-edit-comment-btn');
+        if (cancelEditCommentBtn) {
+            const taskId = document.getElementById('taskId').value;
+            const task = findTask(taskId);
+            renderComments(task);
+        }
+
+        const deleteCommentBtn = e.target.closest('.delete-comment-btn');
+        if (deleteCommentBtn) {
+            const commentItem = deleteCommentBtn.closest('.comment-item');
+            const commentId = commentItem.dataset.commentId;
+            if (confirm('¿Estás seguro de que quieres eliminar este comentario?')) {
+                apiCall('delete_comment', 'POST', { id: commentId })
+                    .then(() => {
+                        const taskId = document.getElementById('taskId').value;
+                        const task = findTask(taskId);
+                        task.comments = task.comments.filter(c => c.id != commentId);
+                        renderComments(task);
+                        renderBoard(); // to update comment count on task card
+                    })
+                    .catch(error => alert('Error al eliminar el comentario: ' + error.message));
             }
         }
     });
