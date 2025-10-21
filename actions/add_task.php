@@ -18,22 +18,18 @@ if (!$column_id) {
 }
 
 // 2. Verificación de autorización (el usuario debe ser dueño del tablero)
-$auth_stmt = $conn->prepare("SELECT b.owner_user_id FROM `columns` c JOIN `boards` b ON c.board_id = b.id WHERE c.id = ?");
-$auth_stmt->bind_param("i", $column_id);
-$auth_stmt->execute();
-$result = $auth_stmt->get_result();
-if ($board = $result->fetch_assoc()) {
-    if ($board['owner_user_id'] != $user_id_session) {
-        http_response_code(403);
-        echo json_encode(['status' => 'error', 'message' => 'No tienes permiso para añadir tareas aquí.']);
-        exit;
-    }
-} else {
+// Obtener board_id de la columna y validar permisos (owner, miembro o admin)
+$board_id = get_board_id_by_column($conn, $column_id);
+if (!$board_id) {
     http_response_code(404);
     echo json_encode(['status' => 'error', 'message' => 'La columna no existe.']);
     exit;
 }
-$auth_stmt->close();
+if (!can_manage_board($conn, $board_id, $user_id_session)) {
+    http_response_code(403);
+    echo json_encode(['status' => 'error', 'message' => 'No tienes permiso para añadir tareas aquí.']);
+    exit;
+}
 
 // 3. Lógica para añadir la tarea
 
@@ -70,6 +66,7 @@ if ($stmt->execute()) {
     $new_task['comments'] = [];
     $new_task['tags'] = [];
 
+    http_response_code(201);
     echo json_encode(['status' => 'success', 'data' => $new_task]);
 } else {
     http_response_code(500);

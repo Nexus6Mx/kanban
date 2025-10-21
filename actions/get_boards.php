@@ -9,10 +9,8 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = $_SESSION['user_id'];
 
-// Por ahora, obtenemos los tableros donde el usuario es propietario.
-// Más adelante se podría expandir para incluir tableros compartidos.
-$stmt = $conn->prepare("SELECT id, name FROM boards WHERE owner_user_id = ? ORDER BY name");
-$stmt->bind_param("i", $user_id);
+// Se obtienen todos los tableros, ya no se filtra por propietario.
+$stmt = $conn->prepare("SELECT id, name FROM boards ORDER BY name");
 $stmt->execute();
 $result = $stmt->get_result();
 

@@ -10,39 +10,22 @@ if (!isset($_SESSION['user_id'])) {
 $user_id = $_SESSION['user_id'];
 $board_id = $_GET['board_id'] ?? null;
 
-// Si no se proporciona un board_id, busca el primer tablero del usuario.
+// Si no se proporciona un board_id, busca el primer tablero disponible.
 if (!$board_id) {
-    $stmt = $conn->prepare("SELECT id FROM boards WHERE owner_user_id = ? ORDER BY id LIMIT 1");
-    $stmt->bind_param("i", $user_id);
+    $stmt = $conn->prepare("SELECT id FROM boards ORDER BY id LIMIT 1");
     $stmt->execute();
     $result = $stmt->get_result();
     if ($board = $result->fetch_assoc()) {
         $board_id = $board['id'];
     } else {
-        // El usuario no tiene tableros. Devuelve una estructura vacía.
+        // No hay tableros en el sistema. Devuelve una estructura vacía.
         echo json_encode(['status' => 'success', 'data' => ['board_id' => null, 'columns' => [], 'users' => [], 'tags' => []]]);
         exit;
     }
     $stmt->close();
 }
 
-// Verificación de seguridad: Asegurarse de que el usuario es propietario del tablero solicitado.
-$stmt = $conn->prepare("SELECT owner_user_id FROM boards WHERE id = ?");
-$stmt->bind_param("i", $board_id);
-$stmt->execute();
-$result = $stmt->get_result();
-if ($board = $result->fetch_assoc()) {
-    if ($board['owner_user_id'] != $user_id) {
-        http_response_code(403);
-        echo json_encode(['status' => 'error', 'message' => 'No tienes acceso a este tablero.']);
-        exit;
-    }
-} else {
-    http_response_code(404);
-    echo json_encode(['status' => 'error', 'message' => 'El tablero no fue encontrado.']);
-    exit;
-}
-$stmt->close();
+// Se elimina la verificación de propiedad para permitir el acceso a todos.
 
 // --- Carga de datos del tablero ---
 $response_data = ['board_id' => (int)$board_id, 'columns' => [], 'users' => [], 'tags' => []];

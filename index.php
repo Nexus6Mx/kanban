@@ -354,7 +354,7 @@ document.addEventListener('DOMContentLoaded', () => {
         findColumn(oldColumnId).tasks.splice(event.oldIndex, 1);
         findColumn(newColumnId).tasks.splice(event.newIndex, 0, task);
         task.column_id = newColumnId;
-        try { await apiCall('move_task', 'POST', { taskId: Number(taskId), newColumnId: Number(newColumnId), newIndex: event.newIndex }); }
+    try { await apiCall('move_task', 'POST', { taskId: Number(taskId), newColumnId: Number(newColumnId), newIndex: event.newIndex, oldColumnId: Number(oldColumnId), oldIndex: event.oldIndex }); }
         catch (error) { await initializeBoard(currentBoardId); }
     }
 

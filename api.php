@@ -39,7 +39,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'upload_attachment') {
 
             $dest_path = $upload_dir . md5(time() . $fileName) . '.' . $fileExtension;
             if(move_uploaded_file($fileTmpPath, $dest_path)) {
-                $conn = db_connect($servername, $username, $password, $dbname);
+                $conn = db_connect($servername, $username, $password, $dbname, $dbport);
                 $stmt = $conn->prepare("INSERT INTO attachments (task_id, file_name, file_path) VALUES (?, ?, ?)");
                 $stmt->bind_param("iss", $taskId, $fileName, $dest_path);
                 if ($stmt->execute()) {
@@ -69,7 +69,7 @@ $action_file = __DIR__ . '/actions/' . $action . '.php';
 if (file_exists($action_file)) {
     header('Content-Type: application/json');
     try {
-        $conn = db_connect($servername, $username, $password, $dbname);
+    $conn = db_connect($servername, $username, $password, $dbname, $dbport);
         
         $data = [];
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST)) {
