@@ -29,12 +29,21 @@ if (!can_manage_board($conn, $board_id, $current_user_id)) {
     exit;
 }
 
-$user_id = empty($data['user_id']) ? null : $data['user_id'];
-$due_date = empty($data['due_date']) ? null : $data['due_date'];
-$priority = $data['priority'] ?? 'Media';
+$title = isset($data['title']) ? trim((string)$data['title']) : '';
+if ($title === '') {
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => 'El título de la tarea es obligatorio.']);
+    exit;
+}
+
+$description = isset($data['description']) ? (string)$data['description'] : '';
+$user_id = ($data['user_id'] ?? '') === '' ? null : (int)$data['user_id'];
+$due_date = isset($data['due_date']) && $data['due_date'] !== '' ? (string)$data['due_date'] : null;
+$priority = isset($data['priority']) ? (string)$data['priority'] : 'Media';
+$color = isset($data['color']) ? (string)$data['color'] : '#FFFFFF';
 
 $stmt = $conn->prepare("UPDATE tasks SET title = ?, description = ?, user_id = ?, due_date = ?, priority = ?, color = ? WHERE id = ?");
-$stmt->bind_param("ssisssi", $data['title'], $data['description'], $user_id, $due_date, $priority, $data['color'], $task_id);
+$stmt->bind_param("ssisssi", $title, $description, $user_id, $due_date, $priority, $color, $task_id);
 if ($stmt->execute()) {
     log_activity($conn, $task_id, $current_user_id, "actualizó los detalles de la tarea.");
     echo json_encode(['status' => 'success']);

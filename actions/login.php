@@ -11,9 +11,22 @@ if (empty($name) || empty($password)) {
 }
 
 // 1. Buscar al usuario por su nombre
-$stmt = $conn->prepare("SELECT * FROM users WHERE name = ?");
+$stmt = $conn->prepare("SELECT id, name, password FROM users WHERE name = ?");
+if (!$stmt) {
+    error_log('Login prepare error: ' . $conn->error);
+    http_response_code(500);
+    echo json_encode(['status' => 'error', 'message' => 'Error interno al iniciar sesión.']);
+    exit;
+}
+
 $stmt->bind_param("s", $name);
-$stmt->execute();
+if (!$stmt->execute()) {
+    error_log('Login execute error: ' . $stmt->error);
+    http_response_code(500);
+    echo json_encode(['status' => 'error', 'message' => 'Error interno al iniciar sesión.']);
+    exit;
+}
+
 $result = $stmt->get_result();
 
 if ($user = $result->fetch_assoc()) {
@@ -40,4 +53,6 @@ if ($user = $result->fetch_assoc()) {
     http_response_code(401); // Unauthorized
     echo json_encode(['status' => 'error', 'message' => 'Credenciales inválidas.']);
 }
+
+$stmt->close();
 ?>

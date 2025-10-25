@@ -4,6 +4,67 @@ session_start();
 require_once 'config.php';
 require_once 'functions.php';
 
+set_error_handler(function ($errno, $errstr, $errfile, $errline) {
+    if (!(error_reporting() & $errno)) {
+        return false;
+    }
+
+    error_log("[API ERROR] {$errstr} in {$errfile}:{$errline}");
+    if (!headers_sent()) {
+        header('Content-Type: application/json');
+    }
+    http_response_code(500);
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Error interno en el servidor.',
+        'code' => $errno
+    ]);
+    exit;
+});
+
+set_exception_handler(function ($exception) {
+    error_log('[API EXCEPTION] ' . $exception->getMessage() . ' in ' . $exception->getFile() . ':' . $exception->getLine());
+    if (!headers_sent()) {
+        header('Content-Type: application/json');
+    }
+    http_response_code(500);
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Error interno en el servidor.'
+    ]);
+    exit;
+});
+
+function get_request_payload(): array {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        return $_REQUEST ?? [];
+    }
+
+    if (!empty($_POST)) {
+        return $_POST;
+    }
+
+    $rawBody = file_get_contents('php://input');
+    if ($rawBody === false || $rawBody === '') {
+        return [];
+    }
+
+    $decoded = json_decode($rawBody, true);
+    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+        return $decoded;
+    }
+
+    $errorMessage = 'JSON inválido en la solicitud.';
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        $errorMessage .= ' ' . json_last_error_msg();
+        error_log('JSON decode error: ' . json_last_error_msg() . ' | Payload: ' . $rawBody);
+    }
+
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => $errorMessage]);
+    exit;
+}
+
 // El manejo de subida de archivos se queda aquí, pero ahora también estará protegido.
 if (isset($_POST['action']) && $_POST['action'] === 'upload_attachment') {
     if (!isset($_SESSION['user_id'])) {
@@ -54,7 +115,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'upload_attachment') {
 }
 
 // --- LÓGICA PRINCIPAL DE LA API ---
-$action = $_REQUEST['action'] ?? '';
+header('Content-Type: application/json');
+$data = get_request_payload();
+$action = $_REQUEST['action'] ?? ($data['action'] ?? '');
 if (empty($action)) {
     http_response_code(400); echo json_encode(['status' => 'error', 'message' => 'Action parameter missing.']); exit;
 }
@@ -67,16 +130,8 @@ if (!in_array($action, $public_actions) && !isset($_SESSION['user_id'])) {
 $action_file = __DIR__ . '/actions/' . $action . '.php';
 
 if (file_exists($action_file)) {
-    header('Content-Type: application/json');
     try {
-    $conn = db_connect($servername, $username, $password, $dbname, $dbport);
-        
-        $data = [];
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST)) {
-             $data = json_decode(file_get_contents('php://input'), true);
-        } else {
-            $data = $_REQUEST;
-        }
+        $conn = db_connect($servername, $username, $password, $dbname, $dbport);
 
         require $action_file;
         $conn->close();
